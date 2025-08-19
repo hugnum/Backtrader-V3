@@ -47,16 +47,28 @@ class BacktestEngine:
         returns = analyzers.returns.get_analysis()
         trade_info = analyzers.trade_analyzer.get_analysis()
 
+        # 승률 계산
+        total_trades = trade_info.get('total', {}).get('total', 0)
+        won_trades = trade_info.get('won', {}).get('total', 0)
+        win_rate_pct = (won_trades / total_trades * 100) if total_trades > 0 else 0
+
+        # Profit Factor 계산
+        gross_profit = trade_info.get('won', {}).get('pnl', {}).get('total', 0)
+        gross_loss = abs(trade_info.get('lost', {}).get('pnl', {}).get('total', 0))
+        profit_factor = (gross_profit / gross_loss) if gross_loss > 0 else 0
+
         analysis = {
             'symbol': self.config['common']['symbol'],
+            'timeframe': self.config['common']['timeframe'],
             'period': f"{self.config['common']['start_date']} ~ {self.config['common']['end_date']}",
             'initial_value': initial_cash,
             'final_value': final_value,
             'total_return_pct': (final_value / initial_cash - 1) * 100,
             'sharpe_ratio': sharpe.get('sharperatio', 0),
             'max_drawdown_pct': drawdown.get('max', {}).get('drawdown', 0),
-            'total_trades': trade_info.get('total', {}).get('total', 0),
-            'win_rate_pct': (trade_info.get('won', {}).get('total', 0) / trade_info.get('total', {}).get('total', 1)) * 100 if trade_info.get('total', {}).get('total', 0) > 0 else 0
+            'total_trades': total_trades,
+            'win_rate_pct': win_rate_pct,
+            'profit_factor': profit_factor
         }
         return analysis
 
