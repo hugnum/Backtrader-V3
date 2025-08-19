@@ -1,0 +1,61 @@
+# ==================================
+# Python & Virtual Environments
+# ==================================
+# 파이썬 캐시 파일 및 바이트코드
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 파이썬 가상환경 폴더
+.venv/
+venv/
+env/
+
+# 빌드, 배포, 설치 관련
+build/
+dist/
+*.egg-info/
+*.egg
+
+
+# ==================================
+# IDE & OS specific files
+# ==================================
+# VSCode
+.vscode/
+
+# MacOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+
+# ==================================
+# Project-specific ignores
+# ==================================
+# 환경 변수 파일 (API 키 등 민감 정보)
+.env
+*.env
+
+# 로그 파일
+*.log
+logs/
+
+# 데이터베이스 파일
+*.sqlite3
+*.db
+
+# === 데이터 및 결과 폴더 (가장 중요) ===
+# data/ 폴더와 그 안의 모든 내용을 무시합니다.
+# 이렇게 하면 data/ohlcv/*.csv 파일들이 모두 자동으로 무시됩니다.
+data/
+
+# results/ 폴더와 그 안의 모든 내용을 무시합니다.
+results/
+
+# Jupyter Notebook 체크포인트
+.ipynb_checkpoints
+
+# 커버리지 리포트 (테스트용)
+.coverage
