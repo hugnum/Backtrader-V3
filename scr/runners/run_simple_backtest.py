@@ -4,6 +4,7 @@ import sys
 import pathlib
 import glob
 import pandas as pd
+import backtrader as bt
 from datetime import datetime, timedelta
 from colorama import init, Fore, Style
 
@@ -36,19 +37,70 @@ def get_available_timeframes():
     return ['1d', '4h', '1h', '15m', '5m', '3m', '1m']
 
 
-def select_config_mode():
-    """설정 모드를 선택합니다."""
-    print("\n=== 백테스트 설정 모드 선택 ===")
-    print("1. config 파일 사용 (기본 설정)")
-    print("2. 수동 설정")
+def get_available_strategies():
+    """strategies.py에서 사용 가능한 전략들을 가져옵니다."""
+    try:
+        # strategies 모듈에서 Strategy 클래스들을 찾기
+        strategy_classes = []
+        for attr_name in dir(strategies):
+            attr = getattr(strategies, attr_name)
+            if (isinstance(attr, type) and 
+                issubclass(attr, bt.Strategy) and 
+                attr != bt.Strategy):
+                strategy_classes.append(attr_name)
+        
+        return sorted(strategy_classes)
+    except Exception:
+        # 오류 발생 시 기본 전략만 반환
+        return ['SmaCrossStrategy']
+
+
+def select_strategy():
+    """전략을 선택합니다."""
+    strategies = get_available_strategies()
+    
+    if not strategies:
+        print("❌ 사용 가능한 전략이 없습니다.")
+        return 'SmaCrossStrategy'  # 기본값
+    
+    print(f"\n=== 사용 가능한 전략 ({len(strategies)}개) ===")
+    for i, strategy in enumerate(strategies, 1):
+        print(f"{i}. {strategy}")
     
     while True:
         try:
-            choice = input("\n선택하세요 (1 또는 2): ").strip()
-            if choice in ['1', '2']:
-                return choice
+            choice = input("\n전략을 선택하세요: ").strip()
+            choice_idx = int(choice) - 1
+            
+            if 0 <= choice_idx < len(strategies):
+                selected_strategy = strategies[choice_idx]
+                print(f"✅ 선택된 전략: {selected_strategy}")
+                return selected_strategy
             else:
-                print("1 또는 2를 입력해주세요.")
+                print("❌ 올바른 숫자를 입력해주세요.")
+                
+        except (ValueError, KeyboardInterrupt):
+            if KeyboardInterrupt:
+                print("\n\n프로그램을 종료합니다.")
+                sys.exit(0)
+            print("❌ 올바른 숫자를 입력해주세요.")
+
+
+def select_config_mode():
+    """설정 모드를 선택합니다."""
+    print("\n=== 백테스트 설정 모드 선택 ===")
+    print("1. config 파일 사용 (기본값)")
+    print("2. 수동 설정")
+
+    while True:
+        try:
+            choice = input("\n선택하세요 (1 또는 2, 엔터=기본설정): ").strip()
+            if choice == '' or choice == '1':
+                return '1'  # 엔터키 또는 1 입력 시 config 파일 사용 (기본값)
+            elif choice == '2':
+                return '2'  # 2 입력 시 수동 설정
+            else:
+                print("1, 2 또는 엔터키를 입력해주세요.")
         except KeyboardInterrupt:
             print("\n\n프로그램을 종료합니다.")
             sys.exit(0)
@@ -203,7 +255,7 @@ def run_backtest_with_config():
     try:
         with open("config/main_config.yaml", 'r', encoding='utf-8') as f:
             config = yaml.safe_load(f)
-        
+
         common_cfg = config['common']
         simple_cfg = config['simple_backtest']
         
@@ -243,15 +295,19 @@ def run_backtest_with_config():
         sys.exit(1)
 
 
-def run_backtest_manual(symbols, timeframes, period_config):
+def run_backtest_manual(symbols, timeframes, period_config, selected_strategy):
     """수동 설정으로 백테스트를 실행합니다."""
     print(f"\n=== 수동 설정 백테스트 ===")
     print(f"선택된 종목: {', '.join(symbols)}")
     print(f"선택된 타임프레임: {', '.join(timeframes)}")
+    print(f"선택된 전략: {selected_strategy}")
     
     # 기간 설정에 따른 시작일과 종료일 결정
     start_date, end_date = get_period_dates(period_config)
     print(f"백테스트 기간: {start_date} ~ {end_date}")
+    
+    # 전략별 기본 파라미터 설정
+    strategy_params = get_strategy_default_params(selected_strategy)
     
     # 모든 조합에 대한 config 리스트 생성
     configs = []
@@ -268,11 +324,8 @@ def run_backtest_manual(symbols, timeframes, period_config):
                     'commission': 0.0015
                 },
                 'simple_backtest': {
-                    'strategy': 'SmaCrossStrategy',
-                    'params': {
-                        'fast_ma': 20,
-                        'slow_ma': 50
-                    }
+                    'strategy': selected_strategy,
+                    'params': strategy_params
                 },
                 'results_path': {
                     'base': 'results',
@@ -284,6 +337,48 @@ def run_backtest_manual(symbols, timeframes, period_config):
             configs.append(config)
     
     return configs
+
+
+def get_strategy_default_params(strategy_name):
+    """전략별 기본 파라미터를 반환합니다."""
+    if strategy_name == 'SmaCrossStrategy':
+        return {
+            'fast_ma': 20,
+            'slow_ma': 50
+        }
+    elif strategy_name == 'MACD_LinePeakStrategy':
+        return {
+            'p_fast1': 5,
+            'p_slow1': 20,
+            'p_fast2': 5,
+            'p_slow2': 40,
+            'p_fast3': 20,
+            'p_slow3': 40,
+            'p_signal': 9,
+            'debug': True
+        }
+    elif strategy_name == 'MACD_LinePeakStrategy_v2':
+        return {
+            'p_fast1': 5,
+            'p_slow1': 20,
+            'p_fast2': 5,
+            'p_slow2': 40,
+            'p_fast3': 20,
+            'p_slow3': 40,
+            'p_signal': 9,
+            # 리스크 관리 파라미터
+            'risk_pct': 1.0,        # 거래당 1% 리스크
+            'sl_mode': 'ATR',       # ATR 기반 스톱로스
+            'atr_len': 14,          # ATR 14기간
+            'atr_mult': 2.0,        # ATR 2배수
+            'sl_percent': 1.5,      # 1.5% 퍼센트 스톱로스
+            'sl_ticks': 50,         # 50틱 스톱로스
+            'min_qty': 0.0001,      # 최소 주문량
+            'debug': True
+        }
+    else:
+        # 기본값
+        return {}
 
 
 def get_period_dates(period_config):
@@ -373,20 +468,86 @@ def execute_backtest(configs):
             # 백테스트 엔진 설정 및 실행
             engine = BacktestEngine(config)
             engine.add_data(data_feed)
+
+            # config 구조 디버깅
+            print("🔍 Config 구조 확인:")
+            print(f"   - common keys: {list(config.get('common', {}).keys())}")
+            print(f"   - simple_backtest keys: "
+                  f"{list(config.get('simple_backtest', {}).keys())}")
             
-            # 전략 추가
-            strategy_class = getattr(strategies, config['simple_backtest']['strategy'])
-            engine.add_strategy(strategy_class, config['simple_backtest']['params'])
+            # 전략 추가 (안전하게)
+            try:
+                if 'strategy' in config.get('common', {}):
+                    strategy_name = config['common']['strategy']
+                elif 'strategy' in config.get('simple_backtest', {}):
+                    strategy_name = config['simple_backtest']['strategy']
+                else:
+                    print("❌ Config에 strategy 정보가 없습니다")
+                    strategy_name = 'SmaCrossStrategy'  # 기본값
+                
+                print(f"🎯 사용할 전략: {strategy_name}")
+                strategy_class = getattr(strategies, strategy_name)
+                engine.add_strategy(strategy_class, 
+                                 config['simple_backtest']['params'])
+                print("✅ 전략 추가 완료")
+            except Exception as strategy_error:
+                print(f"❌ 전략 추가 실패: {strategy_error}")
+                raise strategy_error
             
             # 백테스트 실행
-            results = engine.run()
+            print("🔄 백테스트 실행 중...")
+            try:
+                results = engine.run()
+                print("✅ engine.run() 완료")
+            except Exception as run_error:
+                print(f"❌ engine.run() 실패: {run_error}")
+                results = None
+            
+            # 디버깅: results 상태 확인
+            print(f"📊 Results 타입: {type(results)}")
+            print(f"📊 Results 길이: {len(results) if results else 'None'}")
+            if results and len(results) > 0:
+                print(f"📊 First result 타입: {type(results[0])}")
+                print(f"📊 First result 내용: {results[0]}")
+            else:
+                print("❌ Results가 비어있거나 None입니다")
             
             # 결과 분석
-            analysis = engine.analyze_results(results[0])
+            if results and len(results) > 0:
+                try:
+                    analysis = engine.analyze_results(results[0])
+                    print("✅ 결과 분석 완료")
+                except Exception as analyze_error:
+                    print(f"❌ 결과 분석 실패: {analyze_error}")
+                    # 기본 분석 결과 생성
+                    analysis = {
+                        'symbol': config['common']['symbol'],
+                        'timeframe': config['common']['timeframe'],
+                        'error': f"분석 실패: {analyze_error}"
+                    }
+            else:
+                print("❌ 백테스트 결과가 없습니다")
+                analysis = {
+                    'symbol': config['common']['symbol'],
+                    'timeframe': config['common']['timeframe'],
+                    'error': "백테스트 결과 없음"
+                }
             
-            # period 정보 추가
+            # period 정보와 strategy 정보 추가
             period_str = f"{config['common']['start_date']} ~ {config['common']['end_date']}"
             analysis['period'] = period_str
+            
+            # strategy 정보 추가 (안전하게)
+            try:
+                if 'strategy' in config['simple_backtest']:
+                    analysis['strategy'] = config['simple_backtest']['strategy']
+                elif 'strategy' in config['common']:
+                    analysis['strategy'] = config['common']['strategy']
+                else:
+                    analysis['strategy'] = 'Unknown Strategy'
+            except Exception as strategy_error:
+                print(f"⚠️ Strategy 정보 추가 실패: {strategy_error}")
+                analysis['strategy'] = 'Unknown Strategy'
             
             all_results.append(analysis)
             
@@ -513,27 +674,27 @@ def print_comparison_table(all_results):
     
     print()  # 빈 줄 추가
     
-    # 헤더 출력 (컬럼 너비 최적화)
-    print(f"{Fore.YELLOW}{Style.BRIGHT}{'Symbol':<10} {'TF':<5} {'Calmar':>8} {'Return% (CAGR)':>15} {'MDD%':>7} {'Trades(월평균)':>15} {'Win%':>7} {'PF':>6} {'Sharpe':>8}{Style.RESET_ALL}")
-    print("=" * 100)
+    # 헤더 출력 (컬럼 너비 최적화 + 오른쪽으로 5칸 이동)
+    print(f"     {Fore.YELLOW}{Style.BRIGHT}{'Symbol':<10} {'TF':<5} {'Calmar':>8} {'Return% (CAGR)':>15} {'MDD%':>7} {'Trades(월평균)':>15} {'Win%':>7} {'PF':>6} {'Sharpe':>8}{Style.RESET_ALL}")
+    print("     " + "=" * 100)
     
     # 각 결과 출력
     for result in valid_results:
-        # 정상 결과
+        # 정상 결과 (None 값 안전 처리)
         symbol = result.get('symbol', 'N/A')
         timeframe = result.get('timeframe', 'N/A')
-        return_pct = result.get('total_return_pct', 0)
-        sharpe = result.get('sharpe_ratio', 0)
-        mdd = result.get('max_drawdown_pct', 0)
-        trades = result.get('total_trades', 0)
-        win_rate = result.get('win_rate_pct', 0)
-        profit_factor = result.get('profit_factor', 0)
+        return_pct = result.get('total_return_pct', 0) or 0
+        sharpe = result.get('sharpe_ratio', 0) or 0
+        mdd = result.get('max_drawdown_pct', 0) or 0
+        trades = result.get('total_trades', 0) or 0
+        win_rate = result.get('win_rate_pct', 0) or 0
+        profit_factor = result.get('profit_factor', 0) or 0
         
-        # Calmar Ratio 계산 (수익률 / 최대낙폭)
-        calmar_ratio = (return_pct / abs(mdd)) if mdd != 0 else 0
+        # Calmar Ratio 계산 (수익률 / 최대낙폭) - 안전 처리
+        calmar_ratio = (return_pct / abs(mdd)) if mdd and mdd != 0 else 0
         
         # 색상 결정
-        color = Fore.GREEN if return_pct > 0 else Fore.RED
+        color = Fore.GREEN if return_pct and return_pct > 0 else Fore.RED
         
         # CAGR(연복리 수익률) 계산
         cagr = calculate_cagr(return_pct, result.get('period', ''))
@@ -544,16 +705,16 @@ def print_comparison_table(all_results):
         # 가독성 향상을 위한 포맷팅 (총수익률(CAGR) 형태, 총거래수(월거래수) 형태)
         return_cagr_display = f"{return_pct:.1f}({cagr:.1f})"
         trades_display = f"{trades:.0f}({monthly_trades:.2f})"
-        print(f"{color}{symbol:<10} {timeframe:<5} {calmar_ratio:>8.2f} {return_cagr_display:>14} {mdd:>7.1f}% {trades_display:>14} {win_rate:>7.1f}% {profit_factor:>6.2f} {sharpe:>8.2f}{Style.RESET_ALL}")
+        print(f"     {color}{symbol:<10} {timeframe:<5} {calmar_ratio:>8.2f} {return_cagr_display:>14} {mdd:>7.1f}% {trades_display:>14} {win_rate:>7.1f}% {profit_factor:>6.2f} {sharpe:>8.2f}{Style.RESET_ALL}")
     
     # 오류가 있는 결과도 표시
     error_results = [r for r in all_results if 'error' in r]
     if error_results:
-        print("-" * 90)
+        print("     " + "-" * 90)
         for result in error_results:
-            print(f"{Fore.RED}{result['symbol']:<10} {result['timeframe']:<5} {'ERROR':>8} {'':>9} {'':>7} {'':>8} {'':>7} {'':>6} {'':>8}{Style.RESET_ALL}")
+            print(f"     {Fore.RED}{result['symbol']:<10} {result['timeframe']:<5} {'ERROR':>8} {'':>9} {'':>7} {'':>8} {'':>7} {'':>6} {'':>8}{Style.RESET_ALL}")
     
-    print("=" * 90)
+    print("     " + "=" * 90)
 
 
 
@@ -574,10 +735,11 @@ def main():
         config = run_backtest_with_config()
     else:
         # 수동 설정
+        selected_strategy = select_strategy()
         symbols = select_symbols()
         timeframes = select_timeframes()
         period_config = select_backtest_period()
-        configs = run_backtest_manual(symbols, timeframes, period_config)
+        configs = run_backtest_manual(symbols, timeframes, period_config, selected_strategy)
     
     # 2. 백테스트 실행
     if mode == '1':

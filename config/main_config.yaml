@@ -18,19 +18,30 @@ common:
 
 # 1. 단순 백테스트 설정
 simple_backtest:
-  strategy: 'SmaCrossStrategy'
+  strategy: 'MACD_LinePeakStrategy'
   params:
-    fast_ma: 20
-    slow_ma: 50
+    p_fast1: 5
+    p_slow1: 20
+    p_fast2: 5
+    p_slow2: 40
+    p_fast3: 20
+    p_slow3: 40
+    p_signal: 9
+    debug: true
 
 # 2. 파라미터 최적화 설정
 optimization:
-  strategy: 'SmaCrossStrategy'
+  strategy: 'MACD_LinePeakStrategy'
   # 최적화할 파라미터 범위를 지정합니다.
   # Backtrader의 range와 동일하게 (start, stop, step) 형식으로도 사용 가능합니다.
   params_to_optimize:
-    fast_ma: [10, 20] # 10, 20을 테스트
-    slow_ma: [40, 50, 60] # 40, 50, 60을 테스트 (총 2*3=6회 실행)
+    p_fast1: [5, 10, 15]      # 첫 번째 빠른 이동평균
+    p_slow1: [15, 20, 25]     # 첫 번째 느린 이동평균
+    p_fast2: [5, 10, 15]      # 두 번째 빠른 이동평균
+    p_slow2: [35, 40, 45]     # 두 번째 느린 이동평균 (핵심 MACD)
+    p_fast3: [15, 20, 25]     # 세 번째 빠른 이동평균
+    p_slow3: [35, 40, 45]     # 세 번째 느린 이동평균
+    p_signal: [7, 9, 11]      # 시그널 라인
   # 최적화 목표 지표 (BacktestEngine의 analyze_results가 반환하는 키값 중 하나)
   optimize_target: 'final_value'
 
@@ -38,7 +49,7 @@ optimization:
 walk_forward:
   strategy: 'SmaCrossStrategy'
   # 훈련 기간(In-Sample)과 검증 기간(Out-of-Sample)
-  train_period_days: 270 # 약 9개월
+  train_period_days: 180 # 약 9개월
   test_period_days: 90   # 약 3개월
   # 워크포워드에서 사용할 최적화 파라미터 (optimization 설정을 재사용할 수도 있음)
   params_to_optimize:

@@ -38,7 +38,25 @@ class BacktestEngine:
     def analyze_results(self, strategy_result):
         """실행된 전략의 결과를 분석하고 딕셔너리로 반환합니다."""
         analyzers = strategy_result.analyzers
-        final_value = self.cerebro.broker.getvalue()
+        
+        # ✅ 수정: 최적화와 일반 백테스트 모두 처리
+        if hasattr(strategy_result, 'broker'):
+            # 일반 백테스트
+            final_value = strategy_result.broker.getvalue()
+        else:
+            # 최적화 실행 - analyzers에서 final value 추출
+            returns_analysis = analyzers.returns.get_analysis()
+            
+            # rtot (총 수익률)을 사용해서 final_value 계산
+            if 'rtot' in returns_analysis:
+                rtot = returns_analysis['rtot']  # 예: -0.0134 = -1.34%
+                final_value = 1000 * (1 + rtot)  # initial_cash 대신 1000 사용
+                print(f"✅ rtot {rtot:.4f} 사용하여 final_value 계산: {final_value:.2f}")
+            else:
+                # 기본값 사용
+                final_value = 1000
+                print(f"⚠️ Returns 분석기에서 rtot을 찾을 수 없음. 기본값 {final_value} 사용")
+        
         initial_cash = self.config['common']['initial_cash']
 
         # 각 분석기에서 결과 추출
